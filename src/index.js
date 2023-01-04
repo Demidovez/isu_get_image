@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
 import getImageFromISU from "./getImageFromISU.js";
 import puppeteer from "puppeteer";
+import notFound from "./notFoundBase64.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -31,23 +31,38 @@ const browser = await puppeteer.launch({
 let page = await browser.newPage();
 
 app.get("/*", async (req, res) => {
+  let resultImage = notFound;
+
   try {
     const imageFileName = req.url.split("/").reverse()[0];
 
-    if (new Date().getTime() - (history[imageFileName] || 0) > 15 * 1000) {
+    history[imageFileName] = history[imageFileName] || { time: 0, img: "" };
+
+    if (new Date().getTime() - history[imageFileName].time > 15 * 1000) {
       const pageUrl = process.env.PAGE_HOST + req.url;
 
-      await getImageFromISU(page, pageUrl, imageFileName);
+      const imageBase64 = await getImageFromISU(page, pageUrl);
 
-      history[imageFileName] = new Date().getTime();
+      history[imageFileName] = { time: new Date().getTime(), img: imageBase64 };
     }
 
-    res.sendFile(path.join(path.resolve(), `images/${imageFileName}.jpg`));
+    resultImage = history[imageFileName].img || notFound;
   } catch (err) {
     console.log(err);
 
-    res.sendFile(path.join(path.resolve(), `images/not_found.png`));
+    resultImage = notFound;
   }
+
+  const cleanedImage = Buffer.from(
+    resultImage.replace(/^data:image\/(png|jpeg|jpg);base64,/, ""),
+    "base64"
+  );
+
+  res.writeHead(200, {
+    "Content-Type": "image/png",
+    "Content-Length": cleanedImage.length,
+  });
+  res.end(cleanedImage);
 
   page.close();
   page = await browser.newPage();

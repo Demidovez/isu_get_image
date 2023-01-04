@@ -1,6 +1,6 @@
 import Jimp from "jimp";
 
-const getImageFromISU = (page, pageUrl, imageFileName) => {
+const getImageFromISU = (page, pageUrl) => {
   return new Promise(async (resolve, reject) => {
     const start = new Date().getTime();
     console.log("start... " + pageUrl);
@@ -21,18 +21,15 @@ const getImageFromISU = (page, pageUrl, imageFileName) => {
         quality: 100,
         fullPage: true,
       })
-      .then((image) =>
+      .then((image) => {
         Jimp.read(Buffer.from(image.toString("base64"), "base64"))
-          .then((image) =>
-            image
-              .crop(0, 65, 1920, 960)
-              .quality(100)
-              .writeAsync(`images/${imageFileName}.jpg`)
-          )
-          .catch((err) => reject(err))
-      )
-      .finally(() => {
-        resolve();
+          .then((image) => image.crop(0, 65, 1920, 960).quality(100))
+          .then((image) => {
+            image.getBase64(Jimp.AUTO, (err, res) => {
+              resolve(res);
+            });
+          })
+          .catch((err) => reject(err));
       });
   });
 };
